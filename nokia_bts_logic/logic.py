@@ -73,15 +73,24 @@ def label_change(orig: ET.ElementTree, new_code:str):
 
     return changed
 
-
 def cell_id_change(orig: ET.ElementTree, cell_ids):
     changed = copy.deepcopy(orig)
+    #traceId
+    return changed
 
+def phy_cell_id_change(orig: ET.ElementTree, cell_ids):
+    changed = copy.deepcopy(orig)
+    #phyCellId
     return changed
 
 def root_seq_change(orig: ET.ElementTree, root_seqs):
     changed = copy.deepcopy(orig)
-    
+    #rootSeqIndex
+    return changed
+
+def tac_change(orig: ET.ElementTree, root_seqs):
+    changed = copy.deepcopy(orig)
+    #tac
     return changed
 
 path = 'C:\\Poso\\Nokia\\Stanice\\KGL136\\kgl136_MUSTRA.xml'
