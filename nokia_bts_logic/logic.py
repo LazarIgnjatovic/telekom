@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+from openpyxl import Workbook
 import copy
 import re
 
@@ -62,10 +63,18 @@ def import_bts(file_path: str) -> ET.ElementTree:
 
 def import_lte_table(path:str):
     # TODO
+    #indeksiraj relevantna polja
+
+    #iteracija kroz polja koja sadrze kod i prikupljanje param [kgl, kgo, ...]
+
     return
 
 def import_ip_table(path:str):
     # TODO
+
+    # set() <= polja koja imaju kod
+    # iteriraj kroz polja i skupi ip, gateway i vlan
+
     return
 
 def get_cell_map(orig: ET.ElementTree):
