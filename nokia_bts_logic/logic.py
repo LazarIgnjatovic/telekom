@@ -20,22 +20,12 @@ output_path = "test.xml"
 bcf_id = '3965'
 omusig_remote_addr = '172.21.7.28'
 
-#from IP table
-abis_address = '10.206.149.58'
-abis_gateway = '10.206.149.57'
-abis_vlan = '1010'
-
-s1_address = '10.245.102.30'
-s1_gateway = '10.245.102.29'
-s1_vlan = '1011'
-
-oam_address = '10.244.102.30'
-oam_gateway = '10.244.102.29'
-oam_vlan = '1012'
-
-sync_address = '10.243.51.22'
-sync_gateway = '10.243.51.21'
-sync_vlan = '1013'
+address_space = [
+    ['10.206.149.58','10.206.149.57','1010'],
+    ['10.245.102.30','10.245.102.29','1011'],
+    ['10.244.102.30','10.244.102.29','1012'],
+    ['10.243.51.22','10.243.51.21','1013'],
+]
 
 #from LTE table
 tac = '20411'
@@ -69,6 +59,14 @@ def import_bts(file_path: str) -> ET.ElementTree:
 
     data = ET.parse(file_path)
     return data
+
+def import_lte_table(path:str):
+    # TODO
+    return
+
+def import_ip_table(path:str):
+    # TODO
+    return
 
 def get_cell_map(orig: ET.ElementTree):
     cell_map = {}
@@ -232,79 +230,34 @@ def address_change(orig:ET.ElementTree):
     search = root.findall('.//*[@name="localIpAddr"]')
     parents = root.findall('.//*[@name="localIpAddr"]/..')
     for elem, parent in zip(search, parents):
-        if '10.206.' in elem.text:
-            elem.text = abis_address
-            abis_ip_int = re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','')
-        elif '10.245.' in elem.text:
-            elem.text = s1_address
-            s1_ip_int = re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','')
-        elif '10.244.' in elem.text:
-            elem.text = oam_address
-            oam_ip_int = re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','')
-        elif '10.243.' in elem.text:
-            elem.text = sync_address
-            sync_ip_int = re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','')
+        for addr in address_space:
+            if addr[0][:7] in elem.text:
+                elem.text = addr[0]
+                addr.append(re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-',''))
 
     vlan_parents = root.findall('.//*[@name="interfaceDN"]/..')
     for elem in vlan_parents:
-        if re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == abis_ip_int:
-            abis_vlan_int = re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','')
-        elif re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == s1_ip_int:
-            s1_vlan_int = re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','')
-        elif re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == oam_ip_int:
-            oam_vlan_int = re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','')
-        elif re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == sync_ip_int:
-            sync_vlan_int = re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','')
+        for addr in address_space:
+            if re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == addr[3]:
+                addr.append(re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-',''))
 
     vlans = root.findall('.//*[@name="vlanid"]/..')
     for elem in vlans:
-        if re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == abis_vlan_int:
-            if len(elem.findall('.//[@name="userLabel"]'))>0:
-                #postoji labela
-                old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
-                if len(old_label)>0:
-                    old_label = old_label[0]
-                    elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+abis_vlan)
-            elem.findall('.//[@name="vlanid"]')[0].text = abis_vlan
-
-        elif re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == s1_vlan_int:
-            if len(elem.findall('.//[@name="userLabel"]'))>0:
-                #postoji labela
-                old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
-                if len(old_label)>0:
-                    old_label = old_label[0]
-                    elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+s1_vlan)
-            elem.findall('.//[@name="vlanid"]')[0].text = s1_vlan
-
-        elif re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == oam_vlan_int:
-            if len(elem.findall('.//[@name="userLabel"]'))>0:
-                #postoji labela
-                old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
-                if len(old_label)>0:
-                    old_label = old_label[0]
-                    elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+oam_vlan)
-            elem.findall('.//[@name="vlanid"]')[0].text = oam_vlan
-
-        elif re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == sync_vlan_int:
-            if len(elem.findall('.//[@name="userLabel"]'))>0:
-                #postoji labela
-                old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
-                if len(old_label)>0:
-                    old_label = old_label[0]
-                    elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+sync_vlan)
-            elem.findall('.//[@name="vlanid"]')[0].text = sync_vlan
-        
+        for addr in address_space:
+            if re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == addr[4]:
+                if len(elem.findall('.//[@name="userLabel"]'))>0:
+                    #postoji labela
+                    old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
+                    if len(old_label)>0:
+                        old_label = old_label[0]
+                        elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+addr[2])
+                elem.findall('.//[@name="vlanid"]')[0].text = addr[2]        
 
     search = root.findall('.//*[@name="gateway"]')
     for elem in search:
-        if '10.206.' in elem.text:
-            elem.text = abis_gateway
-        elif '10.245.' in elem.text:
-            elem.text = s1_gateway
-        elif '10.244.' in elem.text:
-            elem.text = oam_gateway
-        elif '10.243.' in elem.text:
-            elem.text = sync_gateway
+        for addr in address_space:
+            if addr[0][:7] in elem.text:
+                elem.text=addr[1]
 
     return changed
 
