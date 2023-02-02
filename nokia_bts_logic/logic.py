@@ -9,38 +9,58 @@ defined_tech_codes = ['','M','H','U','Q','G','L','O','J','F','D','E','N']
 gsm_cell_ext = ['D1','D2','D3','D4']
 cell_ext = ['A','B','C','D']
 
-new_name = 'KGL136'
-new_label = 'KGL136_test_labela'
-new_id ='4752'
-new_location = 'test_lokacija'
+new_name = 'KVL89'
+new_label = 'KVL89_ZC_Studenica_GL'
+new_id ='4741'
+new_location = 'ZC_Studenica'
 
-input_path = 'C:\\Poso\\Nokia\\Stanice\\KGL136\\kgl136_MUSTRA.xml'
+input_path = 'C:\\Poso\\Nokia\\Stanice\\KVO89\\Configuration_kgl136_MUSTRA_modified_20230201-1446.xml'
 output_path = "test.xml"
+
+bcf_id = '3965'
+omusig_remote_addr = '172.21.7.28'
+
+#from IP table
+abis_address = '10.206.149.58'
+abis_gateway = '10.206.149.57'
+abis_vlan = '1010'
+
+s1_address = '10.245.102.30'
+s1_gateway = '10.245.102.29'
+s1_vlan = '1011'
+
+oam_address = '10.244.102.30'
+oam_gateway = '10.244.102.29'
+oam_vlan = '1012'
+
+sync_address = '10.243.51.22'
+sync_gateway = '10.243.51.21'
+sync_vlan = '1013'
 
 #from LTE table
 tac = '20411'
 LNcell_ids = {
-    'KGL136':['47521','47522','47523','47524'],
-    'KGJ136':['1981','1982','1983','1984'],
-    'KGO136':['47525','47526','47527','47528'],
+    'KVL89':['47411','47412','47413','47414'],
+    'KVJ89':['1901','1902','1903','1904'],
+    'KVO89':['47415','47416','47417','47418'],
 }
 
 rootSeqCodes = {
-    'KGL136':['90','100','110','130'],
-    'KGJ136':['90','100','110','130'],
-    'KGO136':['90','100','110','130'],
+    'KVL89':['300','310','320','390'],
+    'KVJ89':['300','310','320','390'],
+    'KVO89':['660','682','704','0'],
 }
 
 cell_ids = {
-    'KGL136':['1216513','1216514','1216515','1216516'],
-    'KGJ136':['1216603','1216604','1216605','1216606'],
-    'KGO136':['1216517','1216518','1216519','1216520'],
+    'KVL89':['1213697','1213698','1213699','1213700'],
+    'KVJ89':['1213787','1213788','1213789','1213790'],
+    'KVO89':['1213701','1213702','1213703','1213704'],
 }
 
 PHcell_ids = {
-    'KGL136':['345','346','347','116'],
-    'KGJ136':['345','346','347','116'],
-    'KGO136':['345','346','347','116'],
+    'KVL89':['30','31','32','39'],
+    'KVJ89':['30','31','32','39'],
+    'KVO89':['30','31','32','39'],
 }
 
 def import_bts(file_path: str) -> ET.ElementTree:
@@ -49,6 +69,27 @@ def import_bts(file_path: str) -> ET.ElementTree:
 
     data = ET.parse(file_path)
     return data
+
+def get_cell_map(orig: ET.ElementTree):
+    cell_map = {}
+    root=orig.getroot()
+    search = root.findall('.//*[@distName]')
+    for elem in search:
+        is_cell = len(elem.findall('./*[@name="cellName"]')) > 0
+        if is_cell:
+            cell_name = elem.findall('./*[@name="cellName"]')[0].text
+
+            if cell_name[-2] == 'D':
+                #GSM celija
+                to_replace =  re.findall(r'LNCEL-\d+',elem.get('distName'))[0].replace('LNCEL-','')
+                new_val = LNcell_ids[cell_name:-2][gsm_cell_ext.index(cell_name[-2:])]
+            else:
+                to_replace =  re.findall(r'LNCEL-\d+',elem.get('distName'))[0].replace('LNCEL-','')
+                new_val = LNcell_ids[cell_name[:-1]][cell_ext.index(cell_name[-1:])]
+
+            cell_map[to_replace]=new_val
+    return cell_map
+
 
 def MRBTS_change(orig: ET.ElementTree, new_id:str, label:str, name:str, location:str):
     changed = copy.deepcopy(orig)
@@ -73,55 +114,43 @@ def MRBTS_change(orig: ET.ElementTree, new_id:str, label:str, name:str, location
     for elem in search:
         elem.text=name
 
-    cell_map = {}
-
-    search = root.findall('.//*[@distName]')
-    for elem in search:
-        is_cell = len(elem.findall('./*[@name="cellName"]'))>0
-        if is_cell:
-            cell_name = elem.findall('./*[@name="cellName"]')[0].text
-
-            if cell_name[-2] == 'D':
-                #GSM celija
-                to_replace =  re.findall(r'LNCEL-\d+',elem.get('distName'))[0]
-                new_val = LNcell_ids[cell_name:-2][gsm_cell_ext.index(cell_name[-2:])]
-            else:
-                to_replace =  re.findall(r'LNCEL-\d+',elem.get('distName'))[0]
-                new_val = LNcell_ids[cell_name[:-1]][cell_ext.index(cell_name[-1:])]
-
-            cell_map[to_replace]=new_val
-            elem.set('distName',elem.get('distName').replace('LNCEL-'+to_replace,'LNCEL-'+new_val))
-
-        elem.set('distName',elem.get('distName').replace('MRBTS-'+old_id,'MRBTS-'+new_id))
-        elem.set('distName',elem.get('distName').replace('SBTS-'+old_id,'SBTS-'+new_id))
-        elem.set('distName',elem.get('distName').replace('LNBTS-'+old_id,'LNBTS-'+new_id))
-        
-
-    search = root.findall('.//p',namespaces={'':'raml21.xsd'})
-    for elem in search:
-        elem.text = elem.text.replace('MRBTS-'+old_id,'MRBTS-'+new_id)
-        elem.text = elem.text.replace('SBTS-'+old_id,'SBTS-'+new_id)
-        elem.text = elem.text.replace('LNBTS-'+old_id,'LNBTS-'+new_id)
-        elem.text = elem.text.replace('LNCEL-'+old_id,'LNCEL-'+cell_map[old_id])
-
-    search = root.findall('.//*[@name="ulCoMpCellList"]//p',namespaces={'':'raml21.xsd'})
-    for elem in search:
-        elem.text = elem.text.replace(old_id,cell_map[old_id])
-
-    return changed
-
-def label_change(orig: ET.ElementTree, new_code:str):
-    changed = copy.deepcopy(orig)
-    root = changed.getroot()
-    new_loc_code = new_code[:2]
+    new_loc_code = new_name[:2]
     old_loc_code = old_code[:2]
-    new_num_code = re.findall(r'\d+', new_code)[0]
+    new_num_code = re.findall(r'\d+', new_name)[0]
     old_num_code = re.findall(r'\d+', old_code)[0]
 
     search = root.findall('.//p',namespaces={'':'raml21.xsd'})
     for elem in search:
         for ext in defined_tech_codes:
             elem.text = elem.text.replace(old_loc_code+ext+old_num_code, new_loc_code+ext+new_num_code)
+
+    cell_map = get_cell_map(changed)
+
+    search = root.findall('.//*[@distName]')
+    for elem in search:
+        elem.set('distName',elem.get('distName').replace('MRBTS-'+old_id,'MRBTS-'+new_id))
+        elem.set('distName',elem.get('distName').replace('SBTS-'+old_id,'SBTS-'+new_id))
+        elem.set('distName',elem.get('distName').replace('LNBTS-'+old_id,'LNBTS-'+new_id))
+
+        old_lncel = re.findall(r'LNCEL-\d+',elem.get('distName'))
+        if len(old_lncel)>0:
+            old_lncel = old_lncel[0].replace('LNCEL-','')
+            elem.set('distName',elem.get('distName').replace('LNCEL-'+old_lncel,'LNCEL-'+cell_map[old_lncel]))
+        
+    search = root.findall('.//p',namespaces={'':'raml21.xsd'})
+    for elem in search:
+        elem.text = elem.text.replace('MRBTS-'+old_id,'MRBTS-'+new_id)
+        elem.text = elem.text.replace('SBTS-'+old_id,'SBTS-'+new_id)
+        elem.text = elem.text.replace('LNBTS-'+old_id,'LNBTS-'+new_id)
+        old_lncel = re.findall(r'LNCEL-\d+',elem.text)
+        if len(old_lncel)>0:
+            old_lncel = old_lncel[0].replace('LNCEL-','')
+            elem.text = elem.text.replace('LNCEL-'+old_id,'LNCEL-'+cell_map[old_lncel])
+
+    search = root.findall('.//*[@name="ulCoMpCellList"]//p',namespaces={'':'raml21.xsd'})
+    for elem in search:
+        if elem.text in cell_map:
+            elem.text = cell_map[elem.text]
 
     return changed
 
@@ -134,7 +163,8 @@ def cell_id_change(orig: ET.ElementTree):
     cells = root.findall('.//*[@class="NOKLTE:LNCEL"]')
     for elem, lcr in zip(search, lcrs):
         for c in cells:
-            if c.findall('.//*[@name="lcrId"]')[0] == lcr:
+            cell_lcr = c.findall('.//*[@name="lcrId"]')[0].text
+            if c.findall('.//*[@name="lcrId"]')[0].text == lcr.text:
                 lncell_id = re.findall(r'LNCEL-\d+', c.get('distName'))[0].replace('LNCEL-','')
                 for code in LNcell_ids:
                     for ind, val in enumerate(LNcell_ids[code]):
@@ -148,14 +178,13 @@ def phy_cell_id_change(orig: ET.ElementTree):
     root = changed.getroot()
 
     search = root.findall('.//*[@name="phyCellId"]')
-    cells = root.findall('.//*[@class="NOKLTE:LNCEL"]')
-    for elem in search:
-        for c in cells:
-            lncell_id = re.findall(r'LNCEL-\d+', c.get('distName'))[0].replace('LNCEL-','')
-            for code in LNcell_ids:
-                for ind, val in enumerate(LNcell_ids[code]):
-                    if val == lncell_id:
-                        elem.text=PHcell_ids[code][ind]
+    cells = root.findall('.//*[@name="phyCellId"]/..')
+    for elem, cell in zip(search,cells):
+        lncell_id = re.findall(r'LNCEL-\d+', cell.get('distName'))[0].replace('LNCEL-','')
+        for code in LNcell_ids:
+            for ind, val in enumerate(LNcell_ids[code]):
+                if val == lncell_id:
+                    elem.text=PHcell_ids[code][ind]
 
     return changed
 
@@ -184,12 +213,108 @@ def tac_change(orig: ET.ElementTree):
         elem.text=tac
     return changed
 
+def bcf_change(orig:ET.ElementTree):
+    changed = copy.deepcopy(orig)
+    root = changed.getroot()
+
+    search = root.findall('.//*[@name="mPlaneRemoteIpAddressOmuSig"]')[0]
+    search.text=omusig_remote_addr
+
+    search = root.findall('.//*[@name="bcfId"]')[0]
+    search.text=bcf_id
+
+    return changed
+
+def address_change(orig:ET.ElementTree):
+    changed = copy.deepcopy(orig)
+    root = changed.getroot()
+
+    search = root.findall('.//*[@name="localIpAddr"]')
+    parents = root.findall('.//*[@name="localIpAddr"]/..')
+    for elem, parent in zip(search, parents):
+        if '10.206.' in elem.text:
+            elem.text = abis_address
+            abis_ip_int = re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','')
+        elif '10.245.' in elem.text:
+            elem.text = s1_address
+            s1_ip_int = re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','')
+        elif '10.244.' in elem.text:
+            elem.text = oam_address
+            oam_ip_int = re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','')
+        elif '10.243.' in elem.text:
+            elem.text = sync_address
+            sync_ip_int = re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','')
+
+    vlan_parents = root.findall('.//*[@name="interfaceDN"]/..')
+    for elem in vlan_parents:
+        if re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == abis_ip_int:
+            abis_vlan_int = re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','')
+        elif re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == s1_ip_int:
+            s1_vlan_int = re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','')
+        elif re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == oam_ip_int:
+            oam_vlan_int = re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','')
+        elif re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == sync_ip_int:
+            sync_vlan_int = re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','')
+
+    vlans = root.findall('.//*[@name="vlanid"]/..')
+    for elem in vlans:
+        if re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == abis_vlan_int:
+            if len(elem.findall('.//[@name="userLabel"]'))>0:
+                #postoji labela
+                old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
+                if len(old_label)>0:
+                    old_label = old_label[0]
+                    elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+abis_vlan)
+            elem.findall('.//[@name="vlanid"]')[0].text = abis_vlan
+
+        elif re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == s1_vlan_int:
+            if len(elem.findall('.//[@name="userLabel"]'))>0:
+                #postoji labela
+                old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
+                if len(old_label)>0:
+                    old_label = old_label[0]
+                    elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+s1_vlan)
+            elem.findall('.//[@name="vlanid"]')[0].text = s1_vlan
+
+        elif re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == oam_vlan_int:
+            if len(elem.findall('.//[@name="userLabel"]'))>0:
+                #postoji labela
+                old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
+                if len(old_label)>0:
+                    old_label = old_label[0]
+                    elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+oam_vlan)
+            elem.findall('.//[@name="vlanid"]')[0].text = oam_vlan
+
+        elif re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == sync_vlan_int:
+            if len(elem.findall('.//[@name="userLabel"]'))>0:
+                #postoji labela
+                old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
+                if len(old_label)>0:
+                    old_label = old_label[0]
+                    elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+sync_vlan)
+            elem.findall('.//[@name="vlanid"]')[0].text = sync_vlan
+        
+
+    search = root.findall('.//*[@name="gateway"]')
+    for elem in search:
+        if '10.206.' in elem.text:
+            elem.text = abis_gateway
+        elif '10.245.' in elem.text:
+            elem.text = s1_gateway
+        elif '10.244.' in elem.text:
+            elem.text = oam_gateway
+        elif '10.243.' in elem.text:
+            elem.text = sync_gateway
+
+    return changed
+
 
 data = import_bts(file_path=input_path)
 changed = MRBTS_change(data,new_id,new_label,new_name,new_location)
-changed = label_change(changed, new_name)
 changed = tac_change(changed)
 changed = root_seq_change(changed)
 changed = cell_id_change(changed)
 changed = phy_cell_id_change(changed)
+changed = bcf_change(changed)
+changed = address_change(changed)
 changed.write(open(output_path,'w'), encoding='unicode')
