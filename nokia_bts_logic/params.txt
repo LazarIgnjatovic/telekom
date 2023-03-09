@@ -1,5 +1,12 @@
-KVL89
-KVL89_ZC_Studenica_GL
-ZC_Studenica
-3965
-172.21.7.28
+KG115
+KG115_Divostin_2_GWL
+Divostin_2
+3650
+172.21.7.29\
+
+ZAL02
+ZAL02_Negotin_GWL
+Negotin
+1160
+172.21.5.21
+
