@@ -107,20 +107,26 @@ class Logic(object):
         workbook = xl.load_workbook(filename=path, data_only=True, read_only=True)
         sheet = workbook.active
 
-        relevant_rows = []
+        relevant_rows = set()
         self.address_space 
-        self.address_space = []
+        self.address_space = {}
         ip_int_column = 34
         loc_code = code[:2]
         num_code = re.findall(r'\d+', code)[0]
         self.log('Searching for relevant fields')
         for row in sheet.rows:
             cell = row[ip_int_column]
-            if cell.value is not None and type(cell.value) is str and len(cell.value) > 2 and len(re.findall(r'\d+', cell.value)) > 0:
-                cell_loc_code = cell.value[:2]
-                cell_num_code = re.findall(r'\d+', cell.value)[0]
-                if cell_loc_code == loc_code and cell_num_code == num_code:
-                    relevant_rows.append(cell.row)
+            if cell.value is not None and type(cell.value) is str:
+                for name_part in cell.value.split('_'):
+                     if len(name_part) > 2 and len(re.findall(r'\d+', name_part)) > 0 and len(re.findall(r'\d+', name_part)[0]) > 1:
+                          # Ovo predstavlja loc code u tabeli
+                        cell_loc_code = name_part[:2]
+                        cell_tech_code = ''
+                        if not name_part[2].isdigit():
+                            cell_tech_code = name_part[2]
+                        cell_num_code = re.findall(r'\d+', name_part)[0]
+                        if cell_loc_code == loc_code and cell_num_code == num_code and cell_tech_code in self.defined_tech_codes:
+                            relevant_rows.add(cell.row)
 
         self.log('Constructing address space')
         for row in relevant_rows:
@@ -129,7 +135,27 @@ class Logic(object):
             octets = ip.split('.')
             octets[-1] = str(int(octets[-1])-1)
             gateway = '.'.join(octets)
-            self.address_space.append([ip,gateway,vlan])
+            int_name = sheet[row][ip_int_column].value
+            if 'rbs' in int_name.lower():
+                if 'RBS' in self.address_space.keys():
+                    raise Exception("Multiple address entries detected in IP_TABLE (same location and number), Check for validity!")
+                self.address_space['RBS'] = [ip,gateway,vlan]
+            elif 'abis' in int_name.lower():
+                if 'ABIS' in self.address_space.keys():
+                    raise Exception("Multiple address entries detected in IP_TABLE (same location and number), Check for validity!")
+                self.address_space['ABIS'] = [ip,gateway,vlan]
+            elif 's1' in int_name.lower():
+                if 'S1' in self.address_space.keys():
+                    raise Exception("Multiple address entries detected in IP_TABLE (same location and number), Check for validity!")
+                self.address_space['S1'] = [ip,gateway,vlan]
+            elif 'oam' in int_name.lower() and '10.244.' in ip:
+                if 'OAM' in self.address_space.keys():
+                    raise Exception("Multiple address entries detected in IP_TABLE (same location and number), Check for validity!")
+                self.address_space['OAM'] = [ip,gateway,vlan]
+            elif 'sync' in int_name.lower():
+                if 'SYNC' in self.address_space.keys():
+                    raise Exception("Multiple address entries detected in IP_TABLE (same location and number), Check for validity!")
+                self.address_space['SYNC'] = [ip,gateway,vlan]
 
         return
 
@@ -330,6 +356,66 @@ class Logic(object):
                     elem.text=addr[1]
 
         return changed
+    
+    def address_change_new(self, orig:ET.ElementTree):
+        self.log('Changig IP address space')
+        changed = copy.deepcopy(orig)
+        root = changed.getroot()
+
+        vlan_lbs = ['RBS','ABIS','S1','OAM','SYNC']
+        vlans = root.findall('.//*[@name="vlanid"]/..')
+        #svi vlanovi
+        for elem in vlans:
+            vlan_labels = elem.findall('.//[@name="userLabel"]')
+            if len(vlan_labels) == 0:
+                #ne postoje labele
+                raise Exception('Please label VLANs with values [RBS/ABIS/S1/OAM/SYNC] inside the template file')
+            vlan_label = vlan_labels[0].text
+            vlan_type = ''
+            for lb in vlan_lbs:
+                if lb.lower() in vlan_label.lower():
+                    vlan_type=lb
+            if vlan_type=='':
+                raise Exception('VLAN labeled: '+vlan_label+' has no corresponding addres, please use values [RBS/ABIS/S1/OAM/SYNC] inside the label')
+            
+            #replace label VLAN value (if defined)
+            old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
+            if len(old_label)>0:
+                old_label = old_label[0]
+                elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+ self.address_space[vlan_type][2])
+            #replace VLAN Id
+            elem.findall('.//[@name="vlanid"]')[0].text = self.address_space[vlan_type][2]
+            #add previous vlanId to address_space
+            self.address_space[vlan_type].append(re.findall(r'VLANIF-\d+',elem.get('distName'))[0].replace('VLANIF-',''))
+
+        #VLAN->IP connection
+        vlan_parents = root.findall('.//*[@name="interfaceDN"]/..')
+        for elem in vlan_parents:
+            for addr in self.address_space.values():
+                if re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','') == addr[3]:
+                    addr.append(re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-',''))
+
+        #IP address change
+        search = root.findall('.//*[@name="localIpAddr"]')
+        parents = root.findall('.//*[@name="localIpAddr"]/..')
+        for elem, parent in zip(search, parents):
+            for addr in self.address_space.values():
+                if re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == addr[4]:
+                    addr.append(elem.text)
+                    octets = elem.text.split('.')
+                    octets[-1] = str(int(octets[-1])-1)
+                    old_gateway = '.'.join(octets)
+                    addr.append(old_gateway)
+                    elem.text=addr[0]
+
+        #Gateway change
+        search = root.findall('.//*[@name="gateway"]')
+        for elem in search:
+            for addr in self.address_space:
+                if addr[6] == elem.text:
+                    elem.text=addr[1]
+
+        return changed
 
     def start(self):
         data = self.import_bts(file_path=self.input_path)
@@ -341,5 +427,6 @@ class Logic(object):
         changed = self.cell_id_change(changed)
         changed = self.phy_cell_id_change(changed)
         changed = self.bcf_change(changed)
-        changed = self.address_change(changed)
+        # changed.write(open(self.output_path,'w'), encoding='unicode')
+        changed = self.address_change_new(changed)
         changed.write(open(self.output_path,'w'), encoding='unicode')

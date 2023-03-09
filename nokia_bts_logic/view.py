@@ -63,7 +63,7 @@ class View(tk.Tk):
         self.template_path_label.grid(column=0,row=8,sticky=tk.E,padx=5,pady=5)
         self.out_path_label.grid(column=0,row=9,sticky=tk.E,padx=5,pady=5)
 
-        self.status_label.grid(column=0,row=11,sticky=tk.SW,padx=5,pady=5)
+        self.status_label.grid(column=1,row=11,sticky=tk.S)
 
         self.lte_button.grid(column=2,row=6,sticky=tk.W,padx=5,pady=5)
         self.ip_button.grid(column=2,row=7,sticky=tk.W,padx=5,pady=5)
@@ -106,8 +106,15 @@ class View(tk.Tk):
 
     def show_status(self,message):
         self.status.set(message)
+        self.update()
 
     def run(self):
+        enabled_fields = []
+        for child in self.children:
+            if self.children[child]['state'] == tk.NORMAL:
+                enabled_fields.append(child)
+                self.children[child].configure(state=tk.DISABLED)
+
         worker = l.Logic(
             self.station_name_text.get(),
             self.station_label_text.get(),
@@ -121,6 +128,11 @@ class View(tk.Tk):
         )
         worker.set_logger(self.show_status)
         worker.start()
+
+        for child in enabled_fields:
+            self.children[child].configure(state=tk.NORMAL)
+
+        self.status.set('Done!')
 
     def start(self):
         self.mainloop()
