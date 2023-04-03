@@ -1,6 +1,6 @@
 import tkinter as tk 
 from tkinter.filedialog import askopenfilename, asksaveasfilename
-from tkinter.messagebox import showinfo
+from tkinter.messagebox import showinfo, showerror
 import logic as l
 
 class View(tk.Tk):
@@ -108,6 +108,9 @@ class View(tk.Tk):
         self.status.set(message)
         self.update()
 
+    def show_error(self,message):
+        showerror('Python Error', message)
+
     def run(self):
         enabled_fields = []
         for child in self.children:
@@ -127,6 +130,7 @@ class View(tk.Tk):
             self.out_path_text.get(),
         )
         worker.set_logger(self.show_status)
+        worker.set_error_handler(self.show_error)
         worker.start()
 
         for child in enabled_fields:

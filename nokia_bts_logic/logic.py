@@ -25,12 +25,19 @@ class Logic(object):
         self.cell_ext = ['A','B','C','D']
         self.address_space = []
         self.logger = print
+        self.err_handle = print
 
     def set_logger(self,logger):
         self.logger=logger
 
+    def set_error_handler(self, handle):
+        self.err_handle = handle
+
     def log(self,message:str):
         self.logger(message+'...')
+
+    def error(self,message:str):
+        self.err_handle(message)
 
     def import_bts(self,file_path: str) -> ET.ElementTree:
         self.log('Importing template')
@@ -131,7 +138,7 @@ class Logic(object):
         self.log('Constructing address space')
         for row in relevant_rows:
             ip = sheet[row][ip_int_column+1].value.split('/')[0]
-            vlan = sheet[row][ip_int_column+2].value
+            vlan = str(sheet[row][ip_int_column+2].value)
             octets = ip.split('.')
             octets[-1] = str(int(octets[-1])-1)
             gateway = '.'.join(octets)
@@ -185,9 +192,11 @@ class Logic(object):
         root=changed.getroot()
 
         search = root.findall('.//*[@name="lnBtsId"]')
-        old_id = search[0].text
-        for elem in search:
-            elem.text=new_id
+        old_id=""
+        if (len(search)>0):
+            old_id = search[0].text
+            for elem in search:
+                elem.text=new_id
 
         search = root.findall('.//*[@name="location"]')
         for elem in search:
@@ -217,6 +226,8 @@ class Logic(object):
         cell_map = self.get_cell_map(changed)
 
         search = root.findall('.//*[@distName]')
+        if(old_id==""):
+            old_id = re.findall(r'MRBTS-\d+', search[0].get('distName'))[0].replace('MRBTS-','')
         for elem in search:
             elem.set('distName',elem.get('distName').replace('MRBTS-'+old_id,'MRBTS-'+new_id))
             elem.set('distName',elem.get('distName').replace('SBTS-'+old_id,'SBTS-'+new_id))
@@ -337,7 +348,7 @@ class Logic(object):
                 if re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-','') == addr[3]:
                     addr.append(re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-',''))
 
-        vlans = root.findall('.//*[@name="vlanid"]/..')
+        vlans = root.findall('.//*[@name="vlanId"]/..')
         for elem in vlans:
             for addr in self.address_space:
                 if re.findall(r'VLANIF-\d+',parent.get('distName'))[0].replace('VLANIF-','') == addr[4]:
@@ -347,7 +358,7 @@ class Logic(object):
                         if len(old_label)>0:
                             old_label = old_label[0]
                             elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+addr[2])
-                    elem.findall('.//[@name="vlanid"]')[0].text = addr[2]        
+                    elem.findall('.//[@name="vlanId"]')[0].text = addr[2]        
 
         search = root.findall('.//*[@name="gateway"]')
         for elem in search:
@@ -363,10 +374,10 @@ class Logic(object):
         root = changed.getroot()
 
         vlan_lbs = ['RBS','ABIS','S1','OAM','SYNC']
-        vlans = root.findall('.//*[@name="vlanid"]/..')
+        vlans = root.findall('.//*[@name="vlanId"]/..')
         #svi vlanovi
         for elem in vlans:
-            vlan_labels = elem.findall('.//[@name="userLabel"]')
+            vlan_labels = elem.findall('.//*[@name="userLabel"]')
             if len(vlan_labels) == 0:
                 #ne postoje labele
                 raise Exception('Please label VLANs with values [RBS/ABIS/S1/OAM/SYNC] inside the template file')
@@ -379,21 +390,26 @@ class Logic(object):
                 raise Exception('VLAN labeled: '+vlan_label+' has no corresponding addres, please use values [RBS/ABIS/S1/OAM/SYNC] inside the label')
             
             #replace label VLAN value (if defined)
-            old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))\d+',elem.findall('.//[@name="userLabel"]')[0].text)
+            label=elem.findall('.//*[@name="userLabel"]')[0].text
+            old_label = re.findall(r'((VLAN)|(Vlan)|(vlan))(\d+)',label)
             if len(old_label)>0:
-                old_label = old_label[0]
-                elem.findall('.//[@name="userLabel"]')[0].text.replace(old_label,'VLAN'+ self.address_space[vlan_type][2])
+                old_lb = old_label[-1][-1]
+                elem.findall('.//*[@name="userLabel"]')[0].text = elem.findall('.//*[@name="userLabel"]')[0].text.replace(old_lb,self.address_space[vlan_type][2])
             #replace VLAN Id
-            elem.findall('.//[@name="vlanid"]')[0].text = self.address_space[vlan_type][2]
+            vlan = elem.findall('.//*[@name="vlanId"]')[0]
+            vlan.text = self.address_space[vlan_type][2]
             #add previous vlanId to address_space
-            self.address_space[vlan_type].append(re.findall(r'VLANIF-\d+',elem.get('distName'))[0].replace('VLANIF-',''))
+            vlanid=re.findall(r'VLANIF-\d+',elem.get('distName'))[0].replace('VLANIF-','')
+            self.address_space[vlan_type].append(vlanid)
 
         #VLAN->IP connection
         vlan_parents = root.findall('.//*[@name="interfaceDN"]/..')
         for elem in vlan_parents:
             for addr in self.address_space.values():
-                if re.findall(r'VLANIF-\d+',elem.findall('.//*[@name="interfaceDN"]')[0].text)[0].replace('VLANIF-','') == addr[3]:
-                    addr.append(re.findall(r'IPIF-\d+',parent.get('distName'))[0].replace('IPIF-',''))
+                interface = elem.findall('.//*[@name="interfaceDN"]')[0]
+                vlanif = re.findall(r'VLANIF-\d+',interface.text)[0].replace('VLANIF-','')
+                if vlanif == addr[3]:
+                    addr.append(re.findall(r'IPIF-\d+',elem.get('distName'))[0].replace('IPIF-',''))
 
         #IP address change
         search = root.findall('.//*[@name="localIpAddr"]')
@@ -411,22 +427,25 @@ class Logic(object):
         #Gateway change
         search = root.findall('.//*[@name="gateway"]')
         for elem in search:
-            for addr in self.address_space:
+            for addr in self.address_space.values():
                 if addr[6] == elem.text:
                     elem.text=addr[1]
 
         return changed
 
     def start(self):
-        data = self.import_bts(file_path=self.input_path)
-        self.import_lte_table(self.lte_path,self.new_name)
-        self.import_ip_table(self.ip_path,self.new_name)
-        changed = self.MRBTS_change(data,self.new_id,self.new_label,self.new_name,self.new_location)
-        changed = self.tac_change(changed)
-        changed = self.root_seq_change(changed)
-        changed = self.cell_id_change(changed)
-        changed = self.phy_cell_id_change(changed)
-        changed = self.bcf_change(changed)
-        # changed.write(open(self.output_path,'w'), encoding='unicode')
-        changed = self.address_change_new(changed)
-        changed.write(open(self.output_path,'w'), encoding='unicode')
+        try: 
+            data = self.import_bts(file_path=self.input_path)
+            self.import_lte_table(self.lte_path,self.new_name)
+            self.import_ip_table(self.ip_path,self.new_name)
+            changed = self.MRBTS_change(data,self.new_id,self.new_label,self.new_name,self.new_location)
+            changed = self.tac_change(changed)
+            changed = self.root_seq_change(changed)
+            changed = self.cell_id_change(changed)
+            changed = self.phy_cell_id_change(changed)
+            changed = self.bcf_change(changed)
+            # changed.write(open(self.output_path,'w'), encoding='unicode')
+            changed = self.address_change_new(changed)
+            changed.write(open(self.output_path,'w'), encoding='unicode')
+        except Exception as e:
+            self.err_handle(e.args)
