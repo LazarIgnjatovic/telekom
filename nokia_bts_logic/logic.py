@@ -151,7 +151,7 @@ class Logic(object):
                 if 'ABIS' in self.address_space.keys():
                     raise Exception("Multiple address entries detected in IP_TABLE (same location and number), Check for validity!")
                 self.address_space['ABIS'] = [ip,gateway,vlan]
-            elif 's1' in int_name.lower():
+            elif '_s1' in int_name.lower():
                 if 'S1' in self.address_space.keys():
                     raise Exception("Multiple address entries detected in IP_TABLE (same location and number), Check for validity!")
                 self.address_space['S1'] = [ip,gateway,vlan]
