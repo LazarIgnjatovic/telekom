@@ -36,7 +36,7 @@ class Logic(object):
         self.err_handle = handle
 
     def log(self, message: str):
-        self.logger(message+'...')
+        self.logger(message)
 
     def error(self, message: str):
         self.err_handle(message)
@@ -502,5 +502,6 @@ class Logic(object):
             # changed.write(open(self.output_path,'w'), encoding='unicode')
             changed = self.address_change_new(changed)
             changed.write(open(self.output_path, 'w'), encoding='unicode')
+            self.log('Done!')
         except Exception as e:
             self.err_handle(e.args)
