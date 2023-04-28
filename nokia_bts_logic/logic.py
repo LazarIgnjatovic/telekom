@@ -361,6 +361,11 @@ class Logic(object):
         return changed
 
     def bcf_change(self, orig: ET.ElementTree):
+
+        if(self.omusig_remote_addr is None or self.bcf_id is None):
+            self.log('BCF data not present. Skipping 2G param change.')
+            return orig
+
         self.log('Changing BCF data')
         changed = copy.deepcopy(orig)
         root = changed.getroot()
